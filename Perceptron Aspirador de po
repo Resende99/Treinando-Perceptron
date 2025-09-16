@@ -1,0 +1,94 @@
+import numpy as np
+
+class AspiradorInteligente:
+    def __init__(self):
+        pass
+
+    def codificar_piso(self, tipo):
+        if tipo == 'madeira':
+            return [1, 0, 0]
+        elif tipo == 'ceramica':
+            return [0, 1, 0]
+        elif tipo == 'carpete':
+            return [0, 0, 1]
+        else:
+            raise ValueError("Tipo de piso inválido")
+
+    def treinar(self, entradas, saidas, taxa_aprendizado=0.1, epocas=100):
+        self.entradas = entradas
+        self.saidas = saidas
+        self.taxa_aprendizado = taxa_aprendizado
+        self.epocas = epocas
+
+        # Inicializa pesos para duas saídas: sucção e velocidade
+        pesos_succao = np.random.uniform(-1, 1, 6)  # 5 entradas + bias
+        pesos_velocidade = np.random.uniform(-1, 1, 6)
+
+        for epoca in range(epocas):
+            for i in range(len(entradas)):
+                entrada = np.array(entradas[i])
+                entrada_com_bias = np.append(entrada, 1)  # adiciona bias
+
+                # Previsões
+                pred_succao = 1 / (1 + np.exp(-np.dot(pesos_succao, entrada_com_bias)))
+                pred_velocidade = 1 / (1 + np.exp(-np.dot(pesos_velocidade, entrada_com_bias)))
+
+                # Erros (ajustados para regressão entre 0 e 1)
+                erro_succao = (saidas[i][0] - 1) / 2 - pred_succao / 2
+                erro_velocidade = (saidas[i][1] - 1) / 4 - pred_velocidade / 4
+
+                # Atualização dos pesos
+                pesos_succao += self.taxa_aprendizado * erro_succao * entrada_com_bias
+                pesos_velocidade += self.taxa_aprendizado * erro_velocidade * entrada_com_bias
+
+        return pesos_succao, pesos_velocidade
+
+    def prever(self, pesos_succao, pesos_velocidade, tipo_piso, nivel_sujeira, distancia):
+        entrada = self.codificar_piso(tipo_piso) + [nivel_sujeira, distancia]
+        entrada_com_bias = np.array(entrada + [1])
+
+        succao_raw = 1 / (1 + np.exp(-np.dot(pesos_succao, entrada_com_bias)))
+        velocidade_raw = 1 / (1 + np.exp(-np.dot(pesos_velocidade, entrada_com_bias)))
+
+        # Escalando para os intervalos desejados
+        succao = round(1 + succao_raw * 2, 2)       # [1, 3]
+        velocidade = round(1 + velocidade_raw * 4, 2)  # [1, 5]
+
+        return succao, velocidade
+
+
+if __name__ == '__main__':
+    aspirador = AspiradorInteligente()
+
+    # Entradas: tipo de piso, sujeira (0–1), distância (0–5)
+    entradas_raw = [
+        ('madeira', 0.2, 4.5),
+        ('ceramica', 0.8, 1.0),
+        ('carpete', 0.9, 0.5),
+        ('carpete', 0.1, 5.0),
+        ('ceramica', 0.6, 2.5),
+        ('madeira', 0.7, 3.0)
+    ]
+
+    # Saídas: [potência de sucção (1–3), velocidade (1–5)]
+    saidas = [
+        [1.2, 4.8],
+        [2.9, 2.5],
+        [3.0, 1.5],
+        [1.1, 4.5],
+        [2.5, 3.0],
+        [2.8, 3.5]
+    ]
+
+    entradas_codificadas = []
+    for piso, sujeira, distancia in entradas_raw:
+        entradas_codificadas.append(aspirador.codificar_piso(piso) + [sujeira, distancia])
+
+    pesos_succao, pesos_velocidade = aspirador.treinar(entradas_codificadas, saidas)
+
+    # Teste de previsão
+    succao, velocidade = aspirador.prever(pesos_succao, pesos_velocidade,
+                                          tipo_piso='carpete', nivel_sujeira=0.95, distancia=1.0)
+
+    print(f'Potência de sucção: {succao}')
+    print(f'Velocidade de movimento: {velocidade}')
